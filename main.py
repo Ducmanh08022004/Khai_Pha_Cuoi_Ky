@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -33,6 +34,18 @@ def parse_args() -> argparse.Namespace:
                         help="Number of K-Means++ clusters (default: 5)")
     parser.add_argument("--output", type=Path, default=None,
                         help="Optional output JSON path")
+
+    # ── Optimization options ──────────────────────────────────────────────────
+    parser.add_argument("--n-estimators", type=int, default=300,
+                        help="Number of Random Forest trees (default: 300)")
+    parser.add_argument("--max-features", type=int, default=5000,
+                        help="TF-IDF max features (default: 5000)")
+    parser.add_argument("--min-support", type=float, default=0.15,
+                        help="Apriori min support (default: 0.15)")
+    parser.add_argument("--sample-size", type=float, default=1.0,
+                        help="Fraction of data to use (default: 1.0 = 100%%)")
+    parser.add_argument("--skip-rules", action="store_true",
+                        help="Skip association rule mining")
 
     return parser.parse_args()
 
@@ -80,7 +93,7 @@ def merge_datasets(sms_df: pd.DataFrame, email_df: pd.DataFrame) -> pd.DataFrame
     combined = combined.drop_duplicates(subset=["text"]).reset_index(drop=True)
     after = len(combined)
     if before != after:
-        print(f"[info] Removed {before - after} duplicate rows.")
+        print(f"[info] Stage 1/6: Removed {before - after} duplicate rows.")
     print(f"[info] SMS rows    : {len(sms_df)}")
     print(f"[info] Email rows  : {len(email_df)}")
     print(f"[info] Combined    : {after} rows")
@@ -94,11 +107,21 @@ def main() -> None:
     sms_df   = load_sms(args.sms_data,   args.sms_text_col,   args.sms_label_col)
     email_df = load_email(args.email_data, args.email_text_col, args.email_label_col)
     df       = merge_datasets(sms_df, email_df)
+    
+    # Apply sampling if requested
+    if args.sample_size < 1.0:
+        print(f"[info] Using {args.sample_size*100:.0f}% of data for quick testing")
+        df = df.sample(frac=args.sample_size, random_state=42).reset_index(drop=True)
+        print(f"[info] Sampled dataset: {len(df)} rows")
 
     pipeline = FraudDetectionPipeline(
         text_col="text",
         label_col="label",
         n_clusters=args.n_clusters,
+        n_estimators=args.n_estimators,
+        max_features=args.max_features,
+        min_support=args.min_support,
+        skip_rules=args.skip_rules,
     )
     summary = pipeline.fit(df)
 
@@ -119,8 +142,18 @@ def main() -> None:
         "cluster_silhouettes": summary.cluster_diagnostics.silhouettes if summary.cluster_diagnostics else [],
     }
 
+    # Save results JSON
     if args.output is not None:
         args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[info] Results saved to {args.output}")
+    
+    # Save trained model
+    models_dir = Path("models")
+    models_dir.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_file = models_dir / f"fraud_detection_model_{timestamp}.pkl"
+    pipeline.save_model(model_file)
+    
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

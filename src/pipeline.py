@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -40,24 +42,35 @@ class FraudDetectionPipeline:
         label_col: str = "label",
         n_clusters: int = 5,
         random_state: int = 42,
+        n_estimators: int = 300,
+        max_features: int = 5000,
+        min_support: float = 0.15,
+        skip_rules: bool = False,
     ) -> None:
         self.text_col = text_col
         self.label_col = label_col
         self.n_clusters = n_clusters
         self.random_state = random_state
+        self.n_estimators = n_estimators
+        self.max_features = max_features
+        self.min_support = min_support
+        self.skip_rules = skip_rules
         self.artifacts = FraudDetectionArtifacts()
 
     def _coerce_labels(self, y: pd.Series) -> pd.Series:
         values = y.astype(str).str.lower().str.strip()
         mapping = {
+            # Fraud/Spam indicators
             "spam": 1,
             "fraud": 1,
             "scam": 1,
             "phishing": 1,
             "lừa đảo": 1,
             "1": 1,
+            # Legitimate/Ham indicators
             "ham": 0,
             "legit": 0,
+            "legitimate": 0,
             "safe": 0,
             "hợp lệ": 0,
             "0": 0,
@@ -70,8 +83,11 @@ class FraudDetectionPipeline:
         if self.label_col not in df.columns:
             raise KeyError(f"Missing label column: {self.label_col}")
 
-        prepared = preprocess_dataframe(df, text_col=self.text_col)
+        print("[info] Stage 2/6: Preprocessing text data...")
+        prepared = preprocess_dataframe(df, text_col=self.text_col, language="en")
         y = self._coerce_labels(prepared[self.label_col])
+        
+        print("[info] Stage 3/6: Splitting into train/test sets...")
         train_df, test_df, y_train, y_test = train_test_split(
             prepared,
             y,
@@ -80,9 +96,12 @@ class FraudDetectionPipeline:
             stratify=y,
         )
 
-        bundle, X_train = build_feature_bundle(train_df, text_col="clean_text")
+        print("[info] Stage 4/6: Building feature vectors...")
+        bundle, X_train = build_feature_bundle(train_df, text_col="clean_text", max_features=self.max_features)
         X_test = transform_feature_bundle(bundle, test_df, text_col="clean_text")
-        classifier = train_random_forest(X_train, y_train, use_smote=use_smote, random_state=self.random_state)
+
+        print("[info] Stage 5/6: Training Random Forest classifier...")
+        classifier = train_random_forest(X_train, y_train, use_smote=use_smote, random_state=self.random_state, n_estimators=self.n_estimators)
         evaluation = evaluate_classifier(classifier, X_test, y_test)
 
         feature_importance = get_feature_importance(classifier, feature_names(bundle))
@@ -104,20 +123,28 @@ class FraudDetectionPipeline:
             else:
                 cluster_risk_map[int(cluster_id)] = float(y_train.loc[cluster_rows.index].mean())
 
-        transactions = build_transactions(
-            train_df[y_train == 1] if (y_train == 1).any() else train_df,
-            text_col="clean_text",
-            extra_item_columns=[
-                column
-                for column in ["has_url", "has_shorturl", "has_phone", "has_money", "bank_mention"]
-                if column in train_df.columns
-            ],
-        )
-        try:
-            rules = mine_association_rules(transactions, RuleMiningConfig())
-        except ImportError:
-            rules = pd.DataFrame(columns=["antecedents", "consequents", "support", "confidence", "lift"])
+        print("[info] Stage 6/6: Mining association rules...")
+        rules = pd.DataFrame(columns=["antecedents", "consequents", "support", "confidence", "lift"])
+        
+        if not self.skip_rules:
+            transactions = build_transactions(
+                train_df[y_train == 1] if (y_train == 1).any() else train_df,
+                text_col="clean_text",
+                extra_item_columns=[
+                    column
+                    for column in ["has_url", "has_shorturl", "has_phone", "has_money", "bank_mention"]
+                    if column in train_df.columns
+                ],
+            )
+            try:
+                config = RuleMiningConfig(min_support=self.min_support)
+                rules = mine_association_rules(transactions, config)
+            except ImportError:
+                pass
+        else:
+            print("[info] Skipping association rule mining")
 
+        print("[info] Finalizing results...")
         self.artifacts = FraudDetectionArtifacts(
             feature_bundle=bundle,
             classifier=classifier,
@@ -185,3 +212,29 @@ class FraudDetectionPipeline:
             rule_hits=0,
             reasons=reasons,
         )
+
+    def save_model(self, model_path: str | Path) -> None:
+        """Save the trained model artifacts to disk using joblib."""
+        if self.artifacts.classifier is None:
+            raise RuntimeError("Pipeline has not been fitted yet. Train model first.")
+        
+        model_path = Path(model_path)
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        joblib.dump(self.artifacts, model_path)
+        print(f"[info] Model saved to {model_path}")
+
+    @classmethod
+    def load_model(cls, model_path: str | Path) -> FraudDetectionPipeline:
+        """Load a previously trained model from disk."""
+        model_path = Path(model_path)
+        if not model_path.exists():
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        
+        artifacts = joblib.load(model_path)
+        
+        # Create a new pipeline instance and restore artifacts
+        pipeline = cls()
+        pipeline.artifacts = artifacts
+        print(f"[info] Model loaded from {model_path}")
+        return pipeline
