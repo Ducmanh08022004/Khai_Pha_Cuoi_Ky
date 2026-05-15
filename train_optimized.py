@@ -196,7 +196,7 @@ def main():
         "--sms-data", str(sms_file),
         "--email-data", str(email_file),
         "--output", str(output_file),
-        "--n-clusters", "5",
+        "--n-clusters", "2",
         "--n-estimators", str(config["n_estimators"]),
         "--max-features", str(config["max_features"]),
         "--min-support", str(config["min_support"]),

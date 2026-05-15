@@ -40,7 +40,7 @@ class FraudDetectionPipeline:
         self,
         text_col: str = "text",
         label_col: str = "label",
-        n_clusters: int = 5,
+        n_clusters: int = 2,
         random_state: int = 42,
         n_estimators: int = 300,
         max_features: int = 5000,

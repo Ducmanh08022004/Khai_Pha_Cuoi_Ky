@@ -16,6 +16,11 @@ TEST_MESSAGES = {
         "URGENT: Confirm your bank details or your account will be closed!",
         "FREE iPhone 13! Limited offer. Click link: http://bit.ly/x123y",
         "You have been selected for a gift card worth $500!",
+        "WINNER ALERT! Claim your Bitcoin rewards: https://winner-alert.xyz",
+        "Your SIM card will be suspended. Call NOW to verify identity: 1-800-XXX-XXXX",
+        "Easy money! Earn $5000/week working from home. No experience needed!",
+        "FINAL NOTICE: Your package delivery failed. Pay customs fee: http://bit.ly/custom",
+        "VIP Member! You have been selected for exclusive loan offer 0% APR today only!",
     ],
     "phishing_email": [
         "Dear Customer, Please confirm your Amazon account by clicking here immediately",
@@ -23,6 +28,11 @@ TEST_MESSAGES = {
         "Chase Bank Security Alert - Confirm your login credentials urgently",
         "Important: Your Bank of America account needs verification within 24 hours",
         "RE: Your payment failed - Update your credit card information here",
+        "SECURITY ALERT: Your Apple ID will be locked due to suspicious activity - VERIFY NOW",
+        "Microsoft Account: Your password will expire in 24 hours - Click to reset",
+        "IRS Tax Refund Notification: Claim your $3,250 refund - Verify identity",
+        "Netflix Account Suspended: Your payment method is invalid - Update immediately",
+        "Google Security: Confirm your recovery email to prevent account lock",
     ],
     "legitimate_sms": [
         "Hi, this is your appointment reminder for tomorrow at 2pm",
@@ -30,6 +40,11 @@ TEST_MESSAGES = {
         "Thanks for your purchase. Receipt: #2024-05-14-xyz",
         "Welcome to our store! Check out our new products this week",
         "Your flight confirmation: BA123 departing May 20 at 10:30",
+        "Verification code: 234567. Valid for 10 minutes. Never share this code.",
+        "Your vaccine appointment is confirmed for June 1st at 3:00 PM - Clinic address: 123 Health St",
+        "Hello! Your restaurant reservation for 2 on May 20 at 7 PM is confirmed",
+        "Package delivered to your doorstep. Sign here for proof of delivery.",
+        "Your bank balance is $2,345.67. Last transaction: Store purchase $45.99",
     ],
     "legitimate_email": [
         "Team meeting scheduled for Friday at 3 PM in conference room B",
@@ -37,6 +52,11 @@ TEST_MESSAGES = {
         "Welcome aboard! Here is your employee handbook and benefits information",
         "Monthly report: Sales exceeded targets by 15% this quarter",
         "Thank you for attending our webinar. Here are the slides",
+        "Request for meeting: Can we discuss Q2 budget allocation on Wednesday?",
+        "Invoice #INV-2024-05-001: Amount due $2,500. Payment due by June 15",
+        "Quarterly performance review scheduled for May 28 at 10:30 AM",
+        "Conference registration confirmation: Tech Summit 2024 - Booth A15",
+        "Regarding your application: We would like to schedule an interview for next week",
     ],
 }
 
