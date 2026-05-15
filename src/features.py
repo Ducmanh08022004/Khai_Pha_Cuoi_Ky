@@ -6,6 +6,7 @@ from typing import Iterable, List, Sequence
 import pandas as pd
 from scipy.sparse import csr_matrix, hstack
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import MinMaxScaler
 
 MANUAL_FEATURE_COLUMNS = [
     "has_url",
@@ -26,6 +27,7 @@ class FeatureBundle:
     matrix: csr_matrix
     text_vectorizer: TfidfVectorizer
     manual_feature_columns: List[str]
+    scaler: MinMaxScaler | None = None
 
 
 def build_text_vectorizer(
@@ -58,13 +60,20 @@ def build_feature_bundle(
     texts = df[text_col].fillna("").astype(str)
     vectorizer = build_text_vectorizer(max_features=max_features, ngram_range=ngram_range)
     text_matrix = vectorizer.fit_transform(texts)
+    
     manual_frame = _manual_feature_frame(df, feature_columns=feature_columns)
-    manual_matrix = csr_matrix(manual_frame.to_numpy())
+    scaler = MinMaxScaler()
+    manual_matrix_scaled = scaler.fit_transform(manual_frame)
+    # Giảm trọng số manual features xuống 10 lần để không lấn át TF-IDF
+    manual_matrix_scaled = manual_matrix_scaled * 0.1
+    manual_matrix = csr_matrix(manual_matrix_scaled)
+    
     matrix = hstack([text_matrix, manual_matrix], format="csr")
     bundle = FeatureBundle(
         matrix=matrix,
         text_vectorizer=vectorizer,
         manual_feature_columns=list(feature_columns),
+        scaler=scaler,
     )
     return bundle, matrix
 
@@ -75,8 +84,15 @@ def transform_feature_bundle(bundle: FeatureBundle, df: pd.DataFrame, text_col: 
 
     texts = df[text_col].fillna("").astype(str)
     text_matrix = bundle.text_vectorizer.transform(texts)
+    
     manual_frame = _manual_feature_frame(df, feature_columns=bundle.manual_feature_columns)
-    manual_matrix = csr_matrix(manual_frame.to_numpy())
+    if bundle.scaler is not None:
+        manual_matrix_scaled = bundle.scaler.transform(manual_frame)
+        manual_matrix_scaled = manual_matrix_scaled * 0.1
+    else:
+        manual_matrix_scaled = manual_frame.to_numpy()
+        
+    manual_matrix = csr_matrix(manual_matrix_scaled)
     return hstack([text_matrix, manual_matrix], format="csr")
 
 

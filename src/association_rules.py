@@ -6,10 +6,13 @@ from typing import Iterable, List, Sequence
 import pandas as pd
 
 try:
-    from mlxtend.frequent_patterns import apriori, association_rules
+    # pyrefly: ignore [missing-import]
+    from mlxtend.frequent_patterns import apriori, fpgrowth, association_rules
+    # pyrefly: ignore [missing-import]
     from mlxtend.preprocessing import TransactionEncoder
 except Exception:  # pragma: no cover - optional dependency
     apriori = None
+    fpgrowth = None
     association_rules = None
     TransactionEncoder = None
 
@@ -27,19 +30,32 @@ def build_transactions(
     df: pd.DataFrame,
     text_col: str = "clean_text",
     extra_item_columns: Sequence[str] | None = None,
+    allowed_tokens: set[str] | None = None,
 ) -> List[List[str]]:
     if text_col not in df.columns:
         raise KeyError(f"Missing text column: {text_col}")
 
     transactions: List[List[str]] = []
-    extra_item_columns = list(extra_item_columns or [])
-
-    for _, row in df.iterrows():
-        items = [token for token in str(row[text_col]).split() if token]
-        for column in extra_item_columns:
-            if column in row and bool(row[column]):
-                items.append(column)
-        transactions.append(sorted(set(items)))
+    extra_cols = [col for col in (extra_item_columns or []) if col in df.columns]
+    
+    texts = df[text_col].fillna("").astype(str).tolist()
+    
+    if extra_cols:
+        extra_data = df[extra_cols].astype(bool).values
+        for i, text in enumerate(texts):
+            items = [token for token in text.split() if token]
+            if allowed_tokens is not None:
+                items = [token for token in items if token in allowed_tokens]
+            for j, col in enumerate(extra_cols):
+                if extra_data[i, j]:
+                    items.append(col)
+            transactions.append(sorted(set(items)))
+    else:
+        for text in texts:
+            items = [token for token in text.split() if token]
+            if allowed_tokens is not None:
+                items = [token for token in items if token in allowed_tokens]
+            transactions.append(sorted(set(items)))
 
     return transactions
 
@@ -48,14 +64,21 @@ def mine_association_rules(
     transactions: Sequence[Sequence[str]],
     config: RuleMiningConfig | None = None,
 ) -> pd.DataFrame:
-    if TransactionEncoder is None or apriori is None or association_rules is None:
-        raise ImportError("mlxtend is required for Apriori rule mining")
+    if TransactionEncoder is None or fpgrowth is None or association_rules is None:
+        raise ImportError("mlxtend is required for FP-Growth rule mining")
 
     config = config or RuleMiningConfig()
     encoder = TransactionEncoder()
-    encoded = encoder.fit(transactions).transform(transactions)
-    one_hot = pd.DataFrame(encoded, columns=encoder.columns_)
-    frequent_itemsets = apriori(
+    # Try sparse output if available to save memory
+    try:
+        encoded = encoder.fit(transactions).transform(transactions, sparse=True)
+        one_hot = pd.DataFrame.sparse.from_spmatrix(encoded, columns=encoder.columns_)
+    except TypeError:
+        # Fallback to dense if mlxtend version doesn't support sparse=True
+        encoded = encoder.fit(transactions).transform(transactions)
+        one_hot = pd.DataFrame(encoded, columns=encoder.columns_)
+        
+    frequent_itemsets = fpgrowth(
         one_hot,
         min_support=config.min_support,
         use_colnames=True,

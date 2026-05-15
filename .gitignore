@@ -19,7 +19,7 @@ env/
 *.json
 data/
 datasets/
-
+result/
 # Output
 results/
 outputs/

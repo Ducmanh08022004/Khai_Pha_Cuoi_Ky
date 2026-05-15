@@ -8,7 +8,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 
 try:
+    # pyrefly: ignore [missing-import]
     from imblearn.over_sampling import SMOTE
+    # pyrefly: ignore [missing-import]
     from imblearn.pipeline import Pipeline as ImbPipeline
 except Exception:  # pragma: no cover - optional dependency
     SMOTE = None
